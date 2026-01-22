@@ -3,168 +3,165 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Silver Spread Monitor</title>
 
-<link rel="manifest" href="manifest.json">
+<title>Silver Monitor</title>
+
+<!-- ✅ ICÔNE IPHONE -->
 <link rel="apple-touch-icon" href="icon.png">
-  
+<link rel="icon" href="icon.png">
+
 <style>
 body {
-  font-family: Arial, sans-serif;
-  background:#0e0e0e;
-  color:#fff;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  background:#0b0f14;
+  color:#eaeaea;
+  text-align:center;
   padding:20px;
 }
 .card {
-  background:#1c1c1c;
+  background:#161b22;
+  border-radius:12px;
   padding:15px;
-  margin-bottom:15px;
-  border-radius:8px;
+  margin:10px auto;
+  max-width:360px;
 }
-.value { font-size:1.6em; }
-canvas { width:100%; height:150px; }
+.value { font-size:1.6em; font-weight:bold; }
+.small { color:#9aa4ad; font-size:0.9em; }
+.alert { color:#ffb300; font-weight:bold; }
+.danger { color:#ff5252; font-weight:bold; }
+canvas { max-width:100%; margin-top:15px; }
 </style>
 </head>
 
 <body>
 
-<h2>Silver Spread Monitor</h2>
+<h2>🥈 Silver Market Monitor</h2>
 
 <div class="card">
-  <div>New York (COMEX)</div>
-  <div class="value" id="ny">--</div>
+  <div>NY / Londres</div>
+  <div id="ny" class="value">--</div>
 </div>
 
 <div class="card">
-  <div>Londres (LBMA)</div>
-  <div class="value" id="ldn">--</div>
+  <div>Shanghai (estimé)</div>
+  <div id="sh" class="value">--</div>
 </div>
 
 <div class="card">
-  <div>Shanghai (proxy physique)</div>
-  <div class="value" id="sh">--</div>
-</div>
-
-<div class="card">
-  <div>Prime Shanghai vs COMEX</div>
-  <div class="value" id="spread">--</div>
-</div>
-
-<div class="card">
-  <div>Structure du marché</div>
-  <div class="value" id="structure">--</div>
+  <div>Spread</div>
+  <div id="spread" class="value">--</div>
 </div>
 
 <div class="card">
   <div>Ratio Or / Argent</div>
-  <div class="value" id="ratio">--</div>
+  <div id="ratio" class="value">--</div>
 </div>
 
 <div class="card">
-  <div>Évolution de la prime (%)</div>
-  <canvas id="chart" width="300" height="150"></canvas>
+  <div>Structure</div>
+  <div id="structure" class="value">--</div>
 </div>
 
 <div class="card">
-  <div>Indicateur de stress</div>
-  <div class="value" id="stress">--</div>
+  <div>Short Squeeze Risk</div>
+  <div id="squeeze" class="value">--</div>
 </div>
+
+<canvas id="chart" height="120"></canvas>
 
 <script>
-const API_KEY = "goldapi-g33at6smkpera45-io";
+const API_URL = "https://api.metals.dev/v1/latest";
+const UPDATE_INTERVAL = 7 * 60 * 60 * 1000; // 7 heures
+const SH_PREMIUM = 1.05;
 
-/* --------- GRAPH --------- */
-function drawChart(data) {
-  const canvas = document.getElementById("chart");
-  const ctx = canvas.getContext("2d");
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+function now(){ return Date.now(); }
 
-  if (data.length < 2) return;
+function shouldFetch(){
+  const last = localStorage.getItem("lastFetch");
+  return !last || now() - last > UPDATE_INTERVAL;
+}
 
-  const max = Math.max(...data, 5);
-  const min = Math.min(...data, 0);
+function save(s,g){
+  localStorage.setItem("silver",s);
+  localStorage.setItem("gold",g);
+  localStorage.setItem("lastFetch",now());
+}
 
-  ctx.beginPath();
-  data.forEach((v, i) => {
-    const x = (i / (data.length - 1)) * canvas.width;
-    const y = canvas.height - ((v - min) / (max - min)) * canvas.height;
-    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+function load(){
+  const s = localStorage.getItem("silver");
+  const g = localStorage.getItem("gold");
+  return s && g ? {s:+s,g:+g} : null;
+}
+
+function updateUI(silver,gold){
+  const sh = silver * SH_PREMIUM;
+  const spread = sh - silver;
+  const spreadPct = spread / silver * 100;
+  const ratio = gold / silver;
+
+  document.getElementById("ny").innerText = silver.toFixed(2)+" $";
+  document.getElementById("sh").innerText = sh.toFixed(2)+" $";
+  document.getElementById("spread").innerText =
+    spread.toFixed(2)+" $ ("+spreadPct.toFixed(2)+"%)";
+  document.getElementById("ratio").innerText = ratio.toFixed(1);
+  document.getElementById("structure").innerText =
+    spreadPct>0 ? "Backwardation" : "Contango";
+
+  /* 🔥 SHORT SQUEEZE SCORE */
+  let score = 0;
+  if (spreadPct > 3) score += 1;
+  if (spreadPct > 5) score += 1;
+  if (ratio > 90) score += 1;
+
+  let label = "Low";
+  let cls = "alert";
+  if (score >= 2) { label="Elevated"; cls="alert"; }
+  if (score >= 3) { label="⚠️ HIGH"; cls="danger"; }
+
+  const sq = document.getElementById("squeeze");
+  sq.innerText = label + " ("+score+"/3)";
+  sq.className = "value "+cls;
+
+  let hist = JSON.parse(localStorage.getItem("hist")||"[]");
+  hist.push(spreadPct);
+  if(hist.length>30)hist.shift();
+  localStorage.setItem("hist",JSON.stringify(hist));
+  draw(hist);
+}
+
+async function fetchData(){
+  try{
+    const r = await fetch(API_URL);
+    const d = await r.json();
+    save(d.metals.silver,d.metals.gold);
+    updateUI(d.metals.silver,d.metals.gold);
+  }catch{
+    const l = load();
+    if(l) updateUI(l.s,l.g);
+  }
+}
+
+function draw(data){
+  const c = document.getElementById("chart");
+  const x = c.getContext("2d");
+  x.clearRect(0,0,c.width,c.height);
+  if(data.length<2)return;
+  const max=Math.max(...data),min=Math.min(...data);
+  x.beginPath(); x.strokeStyle="#4da3ff";
+  data.forEach((v,i)=>{
+    const px=i*(c.width/(data.length-1));
+    const py=c.height-(v-min)/(max-min||1)*c.height;
+    i?x.lineTo(px,py):x.moveTo(px,py);
   });
-
-  ctx.strokeStyle = "#4caf50";
-  ctx.lineWidth = 2;
-  ctx.stroke();
+  x.stroke();
 }
 
-/* --------- LOAD DATA --------- */
-async function load() {
-
-  /* Fallback local */
-  const lastSilver = localStorage.getItem("lastSilver");
-  const lastGold = localStorage.getItem("lastGold");
-
-  if (lastSilver && lastGold) {
-    document.getElementById("ny").innerText = Number(lastSilver).toFixed(2)+" $";
-    document.getElementById("ldn").innerText = Number(lastSilver).toFixed(2)+" $";
-    document.getElementById("sh").innerText = (lastSilver * 1.05).toFixed(2)+" $";
-    document.getElementById("ratio").innerText =
-      (lastGold / lastSilver).toFixed(1);
-  }
-
-  try {
-    const silverRes = await fetch("https://www.goldapi.io/api/XAG/USD", {
-      headers: { "x-access-token": API_KEY }
-    });
-    const goldRes = await fetch("https://www.goldapi.io/api/XAU/USD", {
-      headers: { "x-access-token": API_KEY }
-    });
-
-    if (!silverRes.ok || !goldRes.ok) throw new Error("API limit");
-
-    const silver = await silverRes.json();
-    const gold = await goldRes.json();
-
-    const silverNY = silver.price;
-    const silverSH = silverNY * 1.05;
-
-    document.getElementById("ny").innerText = silverNY.toFixed(2)+" $";
-    document.getElementById("ldn").innerText = silverNY.toFixed(2)+" $";
-    document.getElementById("sh").innerText = silverSH.toFixed(2)+" $";
-
-    const spreadPct = ((silverSH - silverNY) / silverNY) * 100;
-    document.getElementById("spread").innerText =
-      (silverSH - silverNY).toFixed(2)+" $ ("+spreadPct.toFixed(2)+" %)";
-
-    document.getElementById("structure").innerText =
-      silverSH > silverNY ? "Backwardation (tension physique)" : "Contango";
-
-    document.getElementById("ratio").innerText =
-      (gold.price / silverNY).toFixed(1);
-
-    document.getElementById("stress").innerText =
-      spreadPct > 5 ? "⚠️ RISQUE DE SHORT SQUEEZE" : "Situation normale";
-
-    /* Stockage local */
-    localStorage.setItem("lastSilver", silverNY);
-    localStorage.setItem("lastGold", gold.price);
-
-    /* Historique graphique */
-    let hist = JSON.parse(localStorage.getItem("primeHist")) || [];
-    hist.push(spreadPct);
-    if (hist.length > 30) hist.shift();
-    localStorage.setItem("primeHist", JSON.stringify(hist));
-
-    drawChart(hist);
-
-  } catch (e) {
-    console.warn("API indisponible – valeurs conservées");
-  }
-}
-
-load();
-setInterval(load, 25200000); // 7 h refresh
+(function(){
+  const l = load();
+  if(l) updateUI(l.s,l.g);
+  if(shouldFetch()) fetchData();
+})();
 </script>
 
 </body>
 </html>
-
