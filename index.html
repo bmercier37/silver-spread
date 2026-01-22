@@ -72,58 +72,58 @@ body {
 </div>
 
 <script>
-function load() {
-  const silverNY = 24.80;
-  const silverLDN = 24.75;
-  const silverSH = 26.10;
-  const gold = 2050;
+const API_KEY = "goldapi-g33at6smkpera45-io";
 
-  document.getElementById("ny").innerText = silverNY.toFixed(2)+" $";
-  document.getElementById("ldn").innerText = silverLDN.toFixed(2)+" $";
-  document.getElementById("sh").innerText = silverSH.toFixed(2)+" $";
+async function load() {
+  try {
+    // Silver
+    const silverRes = await fetch("https://www.goldapi.io/api/XAG/USD", {
+      headers: { "x-access-token": API_KEY }
+    });
+    const silver = await silverRes.json();
 
-  const spread = silverSH - silverNY;
-  const pct = (spread / silverNY) * 100;
+    // Gold
+    const goldRes = await fetch("https://www.goldapi.io/api/XAU/USD", {
+      headers: { "x-access-token": API_KEY }
+    });
+    const gold = await goldRes.json();
 
-  document.getElementById("spread").innerText =
-    spread.toFixed(2)+" $ ("+pct.toFixed(2)+" %)";
+    const silverNY = silver.price;
+    const silverLDN = silver.price;
+    
+    // Shanghai proxy : prime physique simulée (+3 à +7 %)
+    const silverSH = silverNY * 1.05;
 
-  let alertTxt = "Marché normal";
-  let alertClass = "ok";
+    document.getElementById("ny").innerText = silverNY.toFixed(2)+" $";
+    document.getElementById("ldn").innerText = silverLDN.toFixed(2)+" $";
+    document.getElementById("sh").innerText = silverSH.toFixed(2)+" $";
 
-  if (pct > 8) { alertTxt = "STRESS EXTRÊME"; alertClass="alert"; }
-  else if (pct > 5) { alertTxt = "ALERTE TENSION"; alertClass="alert"; }
-  else if (pct > 3) { alertTxt = "Tension physique"; alertClass="warn"; }
+    const spread = silverSH - silverNY;
+    const pct = (spread / silverNY) * 100;
 
-  document.getElementById("spreadAlert").innerHTML =
-    `<span class="${alertClass}">${alertTxt}</span>`;
+    document.getElementById("spread").innerText =
+      spread.toFixed(2)+" $ ("+pct.toFixed(2)+" %)";
 
-  // Backwardation / Contango
-  document.getElementById("structure").innerText =
-    silverSH > silverNY ? "Backwardation (physique tendu)" : "Contango";
+    document.getElementById("structure").innerText =
+      silverSH > silverNY ? "Backwardation (tension physique)" : "Contango";
 
-  // Ratio Or / Argent
-  const ratio = gold / silverNY;
-  document.getElementById("ratio").innerText = ratio.toFixed(1);
+    document.getElementById("ratio").innerText =
+      (gold.price / silverNY).toFixed(1);
 
-  // Historique local
-  let hist = JSON.parse(localStorage.getItem("spreadHist")) || [];
-  hist.push(pct.toFixed(2));
-  if (hist.length > 7) hist.shift();
-  localStorage.setItem("spreadHist", JSON.stringify(hist));
-  document.getElementById("history").innerText = hist.join(" % | ")+" %";
+    document.getElementById("stress").innerText =
+      pct > 5 ? "⚠️ RISQUE DE SHORT SQUEEZE" : "Situation normale";
 
-  // Stress global
-  document.getElementById("stress").innerText =
-    (pct > 5 && silverSH > silverNY)
-    ? "⚠️ RISQUE DE SHORT SQUEEZE"
-    : "Situation contrôlée";
+  } catch (e) {
+    console.error(e);
+  }
 }
 
 load();
 setInterval(load, 60000);
 </script>
 
+
 </body>
 
 </html>
+
