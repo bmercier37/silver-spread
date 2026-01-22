@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Silver Spread Monitor</title>
 
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.png">
+  
 <style>
 body {
   font-family: Arial, sans-serif;
@@ -19,10 +22,7 @@ body {
   border-radius:8px;
 }
 .value { font-size:1.6em; }
-.alert { color:#ff5252; font-weight:bold; }
-.warn { color:#ffb300; }
-.ok { color:#4caf50; }
-.small { font-size:0.9em; opacity:0.8; }
+canvas { width:100%; height:150px; }
 </style>
 </head>
 
@@ -41,14 +41,13 @@ body {
 </div>
 
 <div class="card">
-  <div>Shanghai (physique)</div>
+  <div>Shanghai (proxy physique)</div>
   <div class="value" id="sh">--</div>
 </div>
 
 <div class="card">
   <div>Prime Shanghai vs COMEX</div>
   <div class="value" id="spread">--</div>
-  <div id="spreadAlert"></div>
 </div>
 
 <div class="card">
@@ -62,33 +61,34 @@ body {
 </div>
 
 <div class="card">
-  <div>Historique récent (7 derniers)</div>
-  <div class="small" id="history">--</div>
+  <div>Évolution de la prime (%)</div>
+  <canvas id="chart" width="300" height="150"></canvas>
 </div>
 
 <div class="card">
-  <div>⚠️ Indicateur de stress</div>
+  <div>Indicateur de stress</div>
   <div class="value" id="stress">--</div>
 </div>
 
 <script>
-const API_KEY = "goldapi-g33at6smkpera45-io";
+const API_KEY = "TA_CLE_API_ICI";
 
+/* --------- GRAPH --------- */
 function drawChart(data) {
   const canvas = document.getElementById("chart");
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+  if (data.length < 2) return;
+
   const max = Math.max(...data, 5);
   const min = Math.min(...data, 0);
 
   ctx.beginPath();
-  ctx.moveTo(0, canvas.height);
-
   data.forEach((v, i) => {
     const x = (i / (data.length - 1)) * canvas.width;
     const y = canvas.height - ((v - min) / (max - min)) * canvas.height;
-    ctx.lineTo(x, y);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
   });
 
   ctx.strokeStyle = "#4caf50";
@@ -96,7 +96,21 @@ function drawChart(data) {
   ctx.stroke();
 }
 
+/* --------- LOAD DATA --------- */
 async function load() {
+
+  /* Fallback local */
+  const lastSilver = localStorage.getItem("lastSilver");
+  const lastGold = localStorage.getItem("lastGold");
+
+  if (lastSilver && lastGold) {
+    document.getElementById("ny").innerText = Number(lastSilver).toFixed(2)+" $";
+    document.getElementById("ldn").innerText = Number(lastSilver).toFixed(2)+" $";
+    document.getElementById("sh").innerText = (lastSilver * 1.05).toFixed(2)+" $";
+    document.getElementById("ratio").innerText =
+      (lastGold / lastSilver).toFixed(1);
+  }
+
   try {
     const silverRes = await fetch("https://www.goldapi.io/api/XAG/USD", {
       headers: { "x-access-token": API_KEY }
@@ -104,6 +118,8 @@ async function load() {
     const goldRes = await fetch("https://www.goldapi.io/api/XAU/USD", {
       headers: { "x-access-token": API_KEY }
     });
+
+    if (!silverRes.ok || !goldRes.ok) throw new Error("API limit");
 
     const silver = await silverRes.json();
     const gold = await goldRes.json();
@@ -116,12 +132,11 @@ async function load() {
     document.getElementById("sh").innerText = silverSH.toFixed(2)+" $";
 
     const spreadPct = ((silverSH - silverNY) / silverNY) * 100;
-
     document.getElementById("spread").innerText =
       (silverSH - silverNY).toFixed(2)+" $ ("+spreadPct.toFixed(2)+" %)";
 
     document.getElementById("structure").innerText =
-      silverSH > silverNY ? "Backwardation" : "Contango";
+      silverSH > silverNY ? "Backwardation (tension physique)" : "Contango";
 
     document.getElementById("ratio").innerText =
       (gold.price / silverNY).toFixed(1);
@@ -129,7 +144,11 @@ async function load() {
     document.getElementById("stress").innerText =
       spreadPct > 5 ? "⚠️ RISQUE DE SHORT SQUEEZE" : "Situation normale";
 
-    // Historique
+    /* Stockage local */
+    localStorage.setItem("lastSilver", silverNY);
+    localStorage.setItem("lastGold", gold.price);
+
+    /* Historique graphique */
     let hist = JSON.parse(localStorage.getItem("primeHist")) || [];
     hist.push(spreadPct);
     if (hist.length > 30) hist.shift();
@@ -138,23 +157,13 @@ async function load() {
     drawChart(hist);
 
   } catch (e) {
-    console.error(e);
+    console.warn("API indisponible – valeurs conservées");
   }
 }
 
 load();
-setInterval(load, 60000);
+setInterval(load, 1800000); // 30 minutes refresh
 </script>
 
-
-<div class="card">
-  <div>Évolution de la prime (%)</div>
-  <canvas id="chart" width="300" height="150"></canvas>
-</div>
-
-  
 </body>
-
 </html>
-
-
