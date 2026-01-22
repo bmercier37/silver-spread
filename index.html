@@ -72,14 +72,11 @@ body {
 </div>
 
 <script>
-async function load() {
-  const r = await fetch("https://www.chinafxtools.com/api/metals");
-  const d = await r.json();
-
-  const silverNY = d.silver.comex;
-  const silverSH = d.silver.shanghai;
-  const silverLDN = d.silver.london;
-  const gold = d.gold.comex;
+function load() {
+  const silverNY = 24.80;
+  const silverLDN = 24.75;
+  const silverSH = 26.10;
+  const gold = 2050;
 
   document.getElementById("ny").innerText = silverNY.toFixed(2)+" $";
   document.getElementById("ldn").innerText = silverLDN.toFixed(2)+" $";
@@ -128,4 +125,5 @@ setInterval(load, 60000);
 </script>
 
 </body>
+
 </html>
