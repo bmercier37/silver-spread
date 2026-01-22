@@ -74,44 +74,68 @@ body {
 <script>
 const API_KEY = "goldapi-g33at6smkpera45-io";
 
+function drawChart(data) {
+  const canvas = document.getElementById("chart");
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const max = Math.max(...data, 5);
+  const min = Math.min(...data, 0);
+
+  ctx.beginPath();
+  ctx.moveTo(0, canvas.height);
+
+  data.forEach((v, i) => {
+    const x = (i / (data.length - 1)) * canvas.width;
+    const y = canvas.height - ((v - min) / (max - min)) * canvas.height;
+    ctx.lineTo(x, y);
+  });
+
+  ctx.strokeStyle = "#4caf50";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
 async function load() {
   try {
-    // Silver
     const silverRes = await fetch("https://www.goldapi.io/api/XAG/USD", {
       headers: { "x-access-token": API_KEY }
     });
-    const silver = await silverRes.json();
-
-    // Gold
     const goldRes = await fetch("https://www.goldapi.io/api/XAU/USD", {
       headers: { "x-access-token": API_KEY }
     });
+
+    const silver = await silverRes.json();
     const gold = await goldRes.json();
 
     const silverNY = silver.price;
-    const silverLDN = silver.price;
-    
-    // Shanghai proxy : prime physique simulée (+3 à +7 %)
     const silverSH = silverNY * 1.05;
 
     document.getElementById("ny").innerText = silverNY.toFixed(2)+" $";
-    document.getElementById("ldn").innerText = silverLDN.toFixed(2)+" $";
+    document.getElementById("ldn").innerText = silverNY.toFixed(2)+" $";
     document.getElementById("sh").innerText = silverSH.toFixed(2)+" $";
 
-    const spread = silverSH - silverNY;
-    const pct = (spread / silverNY) * 100;
+    const spreadPct = ((silverSH - silverNY) / silverNY) * 100;
 
     document.getElementById("spread").innerText =
-      spread.toFixed(2)+" $ ("+pct.toFixed(2)+" %)";
+      (silverSH - silverNY).toFixed(2)+" $ ("+spreadPct.toFixed(2)+" %)";
 
     document.getElementById("structure").innerText =
-      silverSH > silverNY ? "Backwardation (tension physique)" : "Contango";
+      silverSH > silverNY ? "Backwardation" : "Contango";
 
     document.getElementById("ratio").innerText =
       (gold.price / silverNY).toFixed(1);
 
     document.getElementById("stress").innerText =
-      pct > 5 ? "⚠️ RISQUE DE SHORT SQUEEZE" : "Situation normale";
+      spreadPct > 5 ? "⚠️ RISQUE DE SHORT SQUEEZE" : "Situation normale";
+
+    // Historique
+    let hist = JSON.parse(localStorage.getItem("primeHist")) || [];
+    hist.push(spreadPct);
+    if (hist.length > 30) hist.shift();
+    localStorage.setItem("primeHist", JSON.stringify(hist));
+
+    drawChart(hist);
 
   } catch (e) {
     console.error(e);
@@ -123,7 +147,14 @@ setInterval(load, 60000);
 </script>
 
 
+<div class="card">
+  <div>Évolution de la prime (%)</div>
+  <canvas id="chart" width="300" height="150"></canvas>
+</div>
+
+  
 </body>
 
 </html>
+
 
